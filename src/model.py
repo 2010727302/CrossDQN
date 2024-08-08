@@ -53,11 +53,15 @@ class CrossDQN:
         whole_action_vector = self._SACU2(ads_emb, ois_emb)
         # V, A
         V_value = self._V_network(ads_emb, ois_emb)
-        A_value = self._A_network(signal_vector)
+        self.A_value = self._A_network(signal_vector)
+        A_value = self.A_value
         self.Q_value = V_value + A_value
         # res los
-        A_value_whole_action = tf.reshape(self._A_network(tf.reshape(whole_action_vector, [-1, 5 * 4])), [-1, 32])
-        max_q_action_index = tf.reshape(tf.one_hot(tf.argmax(A_value_whole_action, axis=1), depth=32), [-1, 32])
+        self.A_value_whole_action = tf.reshape(self._A_network(tf.reshape(whole_action_vector, [-1, 5 * 4])), [-1, 32])
+        A_value_whole_action = self.A_value_whole_action
+        self.max_q_action_index = tf.reshape(tf.one_hot(tf.argmax(A_value_whole_action, axis=1), depth=32), [-1, 32])
+        max_q_action_index = self.max_q_action_index
+        print("Shape of max_q_action_index: ", max_q_action_index.shape)
         self.eval_res = tf.reduce_sum(tf.constant(WHOLE_ACTION_RES) * max_q_action_index, axis=[0, 1])
 
     def _emb_layer(self, features):
@@ -67,21 +71,75 @@ class CrossDQN:
         behavior_emb = tf.reshape(tf.nn.embedding_lookup(
             self.feature_emb_weights['poi_id_emb'], features['behavior_poi_id_list']),
             [-1, 10, POI_EMB_SIZE])
-        ad_emb = tf.reshape(tf.nn.embedding_lookup(
-            self.feature_emb_weights['poi_id_emb'], features['ad_id_list']),
-            [-1, 5, POI_EMB_SIZE])
-        oi_emb = tf.reshape(tf.nn.embedding_lookup(
-            self.feature_emb_weights['poi_id_emb'], features['oi_id_list']),
-            [-1, 5, POI_EMB_SIZE])
+        # self.ad_emb = tf.reshape(tf.nn.embedding_lookup(
+        #     self.feature_emb_weights['poi_id_emb'], features['ad_id_list']),
+        #     [-1, 5, int(POI_EMB_SIZE)//2])
+        # self.ad_emb = tf.reshape(tf.nn.embedding_lookup(
+        #     self.feature_emb_weights['poi_id_emb'], features['ad_id_list']),
+        #     [-1, 5, int(POI_EMB_SIZE)])
+        # ad_emb = self.ad_emb
+        # self.oi_emb = tf.reshape(tf.nn.embedding_lookup(
+        #     self.feature_emb_weights['poi_id_emb'], features['oi_id_list']),
+        #     [-1, 5, int(POI_EMB_SIZE)//2])
+        # self.oi_emb = tf.reshape(tf.nn.embedding_lookup(
+        #     self.feature_emb_weights['poi_id_emb'], features['oi_id_list']),
+        #     [-1, 5, int(POI_EMB_SIZE)])
+        # oi_emb = self.oi_emb
+        # Perform embedding lookup
+        ad_emb_full = tf.nn.embedding_lookup(self.feature_emb_weights['poi_id_emb'], features['ad_id_list'])
+        oi_emb_full = tf.nn.embedding_lookup(self.feature_emb_weights['poi_id_emb'], features['oi_id_list'])
+
+        # Slice to get the latter half of the embeddings
+        ad_emb_half = ad_emb_full[:, :, int(POI_EMB_SIZE)//2:]
+        oi_emb_half = oi_emb_full[:, :, int(POI_EMB_SIZE)//2:]
+
+        # Reshape the sliced embeddings
+        self.ad_emb = tf.reshape(ad_emb_half, [-1, 5, int(POI_EMB_SIZE)//2])
+        ad_emb = self.ad_emb
+        self.oi_emb = tf.reshape(oi_emb_half, [-1, 5, int(POI_EMB_SIZE)//2])
+        oi_emb = self.oi_emb
         context_emb = tf.reshape(tf.nn.embedding_lookup(
             self.feature_emb_weights['context_id_emb'], features['context_id']),
             [-1, 1, CONTEXT_EMB_SIZE])
+        print("ad_emb:",self.ad_emb.shape)
+
+        print("oi_emb:",self.oi_emb.shape)
+        # 创建 ad_bid_emb，确保 bid 值大于 0
+        ad_bid_emb = tf.nn.embedding_lookup(
+            self.feature_emb_weights['poi_id_emb'], 
+            tf.cast(tf.maximum(features['ad_bid_id_list'], 0), tf.int32))
+
+        ad_bid_emb=tf.reshape(ad_bid_emb[:, :, int(POI_EMB_SIZE)//2:], [-1, 5, int(POI_EMB_SIZE)//2])
+
+        # 创建 oi_bid_emb，确保 bid 值等于 0
+        oi_bid_emb = tf.nn.embedding_lookup(
+            self.feature_emb_weights['poi_id_emb'],
+            tf.cast(tf.equal(features['oi_bid_id_list'], 0), tf.int32))
+        oi_bid_emb=tf.reshape(oi_bid_emb[:, :, int(POI_EMB_SIZE)//2:], [-1, 5, int(POI_EMB_SIZE)//2])
+        # 为有机项目创建 bid_emb，全为 0
+        # zero_bid_emb = tf.zeros_like(ad_bid_emb)
+        
+         # Concatenate embeddings along the last dimension
+        self.ad_emb = tf.concat([self.ad_emb, ad_bid_emb], axis=-1)  # Shape: [-1, 5, POI_EMB_SIZE]
+        self.oi_emb = tf.concat([self.oi_emb, oi_bid_emb], axis=-1)  # Shape: [-1, 5, POI_EMB_SIZE]
+        print("ad_emb:",self.ad_emb)
+        print("ad_emb:",self.ad_emb.shape)
+        print("oi_emb:",self.oi_emb)
+
+        print("oi_emb.shape:",self.oi_emb.shape)
+        ad_emb = self.ad_emb
+        oi_emb = self.oi_emb
         return {"user_emb": user_emb, "behavior_emb": behavior_emb,
                 "ad_emb": ad_emb, "oi_emb": oi_emb, "context_emb": context_emb}
 
     def _target_attention(self, emb_map):
+        print("Shape of emb_map['ad_emb']:", emb_map['ad_emb'].shape)
+        print("Shape of emb_map['oi_emb']:", emb_map['oi_emb'].shape)
         ad_attention_res = self._attention(emb_map['ad_emb'], emb_map['behavior_emb'])
         oi_attention_res = self._attention(emb_map['oi_emb'], emb_map['behavior_emb'])
+        print("Shape of ad_attention_res:", ad_attention_res.shape)
+        print("Shape of oi_attention_res:", oi_attention_res.shape)
+
         ad_input_all = tf.concat([ad_attention_res, emb_map['ad_emb'], emb_map['user_emb'], emb_map['context_emb']],
                                  axis=-2)
         oi_input_all = tf.concat([oi_attention_res, emb_map['oi_emb'], emb_map['user_emb'], emb_map['context_emb']],
@@ -97,11 +155,18 @@ class CrossDQN:
                                                                                 axis=1)
 
     def _attention(self, ori_queries, ori_keys):
+        print("Shape of ori_queries:", ori_queries.shape)
+        print("Shape of ori_keys:", ori_keys.shape)
         queries = tf.tile(tf.expand_dims(ori_queries, axis=2),
                           [1, 1, ori_keys.get_shape().as_list()[1], 1])  # B * (T1 * T) * H
         keys = tf.tile(tf.expand_dims(ori_keys, axis=1),
                        [1, ori_queries.get_shape().as_list()[1], 1, 1])  # B * (T1 * T) * H
+        print("Shape of queries:", queries.shape)
+        print("Shape of keys:", keys.shape)
+        print("Shape of queries - keys:", (queries - keys).shape)
+        print("Shape of queries * keys:", (queries * keys).shape)
         din_all = tf.concat([queries, keys, queries - keys, queries * keys], axis=-1)
+        print("Shape of din_all:", din_all.shape)
         d_layer_1_all = tf.layers.dense(din_all, 80, activation=tf.nn.sigmoid, name='f1_att',
                                         reuse=tf.AUTO_REUSE)  # [B, T, 80]
         d_layer_2_all = tf.layers.dense(d_layer_1_all, 40, activation=tf.nn.sigmoid, name='f2_att',
@@ -116,6 +181,7 @@ class CrossDQN:
         outputs = tf.nn.softmax(outputs)
         # Weighted sum
         outputs = tf.matmul(outputs, ori_keys)  # [B,T1,H]
+        print("outputs:",outputs)
         return outputs
 
     def _SACU(self, ads_emb, ois_emb, action):
@@ -211,15 +277,40 @@ class CrossDQN:
     def model_fn_estimator(self, features, labels, mode):
         self.create_weights()
         self.create_model(features)
+
         if mode == tf.estimator.ModeKeys.TRAIN:
             self.create_loss(labels)
             self.create_optimizer()
-            return tf.estimator.EstimatorSpec(mode=mode, loss=self.loss, train_op=self.train_op)
+
+            # 添加summary hook
+            summary_hook = tf.train.SummarySaverHook(
+                save_steps=10,  # 可以适当增加保存步骤的间隔
+                output_dir='logs',
+                summary_op=tf.summary.merge_all()
+            )
+            #添加LoggingTensorHook来输出reward
+
+            # 添加LoggingTensorHook来输出loss
+            logging_hook = tf.train.LoggingTensorHook(
+                tensors={'loss': self.loss, 'A_value_whole_action':self.A_value_whole_action,'max_q_action_index':self.max_q_action_index,'ads_emb':self.ad_emb,'ois_emb':self.oi_emb},
+                every_n_iter=10  # 每100个步骤输出一次loss
+            )
+
+            return tf.estimator.EstimatorSpec(
+                mode=mode,
+                loss=self.loss,
+                train_op=self.train_op,
+                training_hooks=[summary_hook, logging_hook]  # 添加summary和logging hook
+            )
         elif mode == tf.estimator.ModeKeys.PREDICT:
             outputs = {'Q_value': tf.identity(self.Q_value, "Q_value")}
             export_outputs = {tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY:
-                                  tf.estimator.export.PredictOutput(outputs)}
-            return tf.estimator.EstimatorSpec(mode=mode, predictions=outputs, export_outputs=export_outputs)
+                                tf.estimator.export.PredictOutput(outputs)}
+            return tf.estimator.EstimatorSpec(
+                mode=mode,
+                predictions=outputs,
+                export_outputs=export_outputs
+            )
 
     def create_loss(self, labels):
         self.reward = AD_WEIGHT * labels['r_ad'] + FEE_WEIGHT * labels['r_fee'] + REX_WEIGHT * labels['r_ex']
@@ -227,6 +318,9 @@ class CrossDQN:
         if USE_AUX_RES_LOSS:
             self.loss = self.loss + AUX_RES_LOSS_WIEHGT * tf.square(self.eval_res - TARGET_RES)
 
+        # 添加 TensorBoard summary
+        # tf.summary.scalar('reward', self.reward)
+        tf.summary.scalar('loss', self.loss)  # 记录损失值
     def create_optimizer(self):
         self.optimizer = tf.train.AdamOptimizer(learning_rate=LEARNING_RATE, beta1=0.9, beta2=0.999,
                                                 epsilon=1e-8)
