@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from input import *
 from model import *
-
+import csv
 def create_estimator():
     tf.logging.set_verbosity(tf.logging.INFO)
     session_config = tf.ConfigProto(allow_soft_placement=True, log_device_placement=False)
@@ -38,6 +38,17 @@ def save_estimator(estimator, export_dir):
 
 def predict_with_model(estimator, input_fn):
     predictions = estimator.predict(input_fn=input_fn)
+    csv_file_name = 'max_q_action_index.csv'
+    with open(csv_file_name, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        # Write a header row (assuming self.max_q_action_index has a fixed size, e.g., 32)
+        writer.writerow([f'index_{i}' for i in range(32)])  # Adjust the range according to the actual size
+
+        for pred in predictions:
+            max_q_action_index = pred['self.max_q_action_index']
+            writer.writerow(max_q_action_index)
+
+    print(f"max_q_action_index values saved to {csv_file_name}")
     for pred in predictions:
         print(pred)  # 打印每个预测结果
 
@@ -51,7 +62,7 @@ if __name__ == '__main__':
     save_estimator(estimator, PB_SAVE_PATH)
 
     # 定义预测输入函数
-    # predict_input_fn = input_fn_maker(DATA_PATH)  # 使用适当的预测数据
-    #
-    # # 获取并打印预测结果
-    # predict_with_model(estimator, predict_input_fn)
+    predict_input_fn = input_fn_maker(DATA_PATH)  # 使用适当的预测数据
+
+    # 获取并打印预测结果
+    predict_with_model(estimator, predict_input_fn)

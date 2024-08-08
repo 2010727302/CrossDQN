@@ -3,7 +3,6 @@ import tensorflow as tf
 from config import *
 import numpy as np
 
-
 class CrossDQN:
     def __init__(self):
         pass
@@ -295,15 +294,24 @@ class CrossDQN:
                 tensors={'loss': self.loss, 'A_value_whole_action':self.A_value_whole_action,'max_q_action_index':self.max_q_action_index,'ads_emb':self.ad_emb,'ois_emb':self.oi_emb},
                 every_n_iter=10  # 每100个步骤输出一次loss
             )
-
+            # csv_saving_hook = SaveToCSVHook(
+            #     tensor_name='self.max_q_action_index:1',
+            #     csv_file_name='max_q_action_index.csv',  # Just the filename, no directory
+            #     every_n_iter=10
+            # )
             return tf.estimator.EstimatorSpec(
                 mode=mode,
                 loss=self.loss,
                 train_op=self.train_op,
                 training_hooks=[summary_hook, logging_hook]  # 添加summary和logging hook
             )
+            # for op in tf.get_default_graph().get_operations():
+            #     print("op.name",op.name)
         elif mode == tf.estimator.ModeKeys.PREDICT:
-            outputs = {'Q_value': tf.identity(self.Q_value, "Q_value")}
+            outputs = {'Q_value': tf.identity(self.Q_value, "Q_value"),
+                       'self.max_q_action_index': tf.identity(self.max_q_action_index, "self.max_q_action_index")
+
+                       }
             export_outputs = {tf.saved_model.signature_constants.DEFAULT_SERVING_SIGNATURE_DEF_KEY:
                                 tf.estimator.export.PredictOutput(outputs)}
             return tf.estimator.EstimatorSpec(

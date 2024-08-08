@@ -2,17 +2,20 @@
 import tensorflow as tf
 import numpy as np
 from config import *
-
+import csv
 
 def generate_random_demo_data():
     demo_data = []
+    ad_bid_data = []
+    oi_vol_data = []
+    ad_vol_data = []
     for i in range(10):
         # 随机生成数据
         user_id = np.random.randint(100, 10001)
         history_poi_id_list = np.random.randint(100, 10001, size=10).tolist()
         ad_id_list = np.random.randint(10, 101, size=5).tolist()
         oi_id_list = np.random.randint(10, 101, size=5).tolist()
-        ad_bid_id_list = np.random.uniform(0.1, 10.0, size=5).tolist()  # 随机生成大于0的bid值
+        ad_bid_id_list = np.random.uniform(10, 101, size=5).tolist()  # 随机生成大于0的bid值
         oi_bid_id_list = [0.0] * 5  # 生成全为0的bid值
         context_id = np.random.randint(1, 101)
         history_poi_id_list[4:] = [0] * (len(history_poi_id_list) - 4)
@@ -31,8 +34,28 @@ def generate_random_demo_data():
             *last_five_values
         ]
         label_data = [R_ad, R_fee, R_ex]
-
+        ad_bid_data.append(ad_bid_id_list)
+        ad_vol_data.append(ad_id_list)
+        oi_vol_data.append(oi_id_list)
         demo_data.append([feature_data, label_data])
+    csv_file_name = 'ad_bid_id_list.csv'
+    with open(csv_file_name, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["ad_bid_1", "ad_bid_2", "ad_bid_3", "ad_bid_4", "ad_bid_5"])
+        writer.writerows(ad_bid_data)
+    print(f"ad_bid_id_list saved to {csv_file_name}")
+    csv_file_name = 'ad_id_list.csv'
+    with open(csv_file_name, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["ad_id_1", "ad_id_2", "ad_id_3", "ad_id_4", "ad_id_5"])
+        writer.writerows(ad_vol_data)
+    print(f"ad_id_list saved to {csv_file_name}")
+    csv_file_name = 'oi_id_list.csv'
+    with open(csv_file_name, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["oi_id_1", "oi_id_2", "oi_id_3", "oi_id_4", "oi_id_5"])
+        writer.writerows(oi_vol_data)
+    print(f"oi_id_list saved to {csv_file_name}")
 
     return demo_data
 def demo_tfrecord_data(tfrecord_file_name):
@@ -123,7 +146,7 @@ def input_fn_maker(file_names):
 
 
 if __name__ == '__main__':
-    print(DATA_PATH[0])
+    # print(DATA_PATH[0])
     demo_tfrecord_data(DATA_PATH[0])
     train_input_fn = input_fn_maker(DATA_PATH)
     features, labels = train_input_fn()
